@@ -1,7 +1,9 @@
 const express = require('express')
 const cors = require('cors')
 const dotenv = require('dotenv')
-const connectDB = require('./config/db')
+
+import connectDB from './config/db'
+import type { Request, Response } from 'express'
 
 dotenv.config()
 
@@ -13,9 +15,9 @@ require('./models/Product')
 require('./models/Lot')
 require('./models/Alert')
 require('./models/Movement')
+
 const runAlertJob = require('./jobs/alertJob')
 runAlertJob()
-
 
 const app = express()
 
@@ -29,11 +31,12 @@ app.use('/api/alerts', require('./routes/alertRoutes'))
 app.use('/api/movements', require('./routes/movementRoutes'))
 app.use('/api/reports', require('./routes/reportRoutes'))
 
-app.get('/', (req, res) => {
+app.get('/', (req: Request, res: Response) => {
   res.json({ message: 'API Sistema de Validade funcionando!' })
 })
 
 const PORT = process.env.PORT || 5000
+
 app.listen(PORT, () => {
   console.log(`Servidor rodando na porta ${PORT}`)
 })
