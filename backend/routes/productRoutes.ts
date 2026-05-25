@@ -1,5 +1,7 @@
-const express = require('express')
-const router = express.Router()
+import { Router } from 'express'
+import { protect } from '../middlewares/authMiddleware'
+import { adminOnly } from '../middlewares/roleMiddleware'
+
 const {
   createProduct,
   getProducts,
@@ -7,8 +9,8 @@ const {
   updateProduct,
   deleteProduct
 } = require('../controllers/productController')
-const { protect } = require('../middlewares/authMiddleware')
-const { adminOnly } = require('../middlewares/roleMiddleware')
+
+const router = Router()
 
 router.use(protect)
 
@@ -18,4 +20,4 @@ router.post('/', adminOnly, createProduct)
 router.put('/:id', adminOnly, updateProduct)
 router.delete('/:id', adminOnly, deleteProduct)
 
-module.exports = router
+export default router

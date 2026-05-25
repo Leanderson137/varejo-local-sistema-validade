@@ -1,11 +1,12 @@
-const express = require('express')
-const router = express.Router()
-const {
+import { Router } from 'express'
+import { protect } from '../middlewares/authMiddleware'
+import {
   getDashboard,
   getExpirationReport,
   getMovementReport
-} = require('../controllers/reportController')
-const { protect } = require('../middlewares/authMiddleware')
+} from '../controllers/reportController'
+
+const router = Router()
 
 router.use(protect)
 
@@ -13,4 +14,4 @@ router.get('/dashboard', getDashboard)
 router.get('/expiration', getExpirationReport)
 router.get('/movements', getMovementReport)
 
-module.exports = router
+export default router

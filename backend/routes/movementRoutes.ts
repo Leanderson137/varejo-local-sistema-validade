@@ -1,14 +1,16 @@
-const express = require('express')
-const router = express.Router()
+import { Router } from 'express'
+import { protect } from '../middlewares/authMiddleware'
+
 const {
   createMovement,
   getMovements
 } = require('../controllers/movementController')
-const { protect } = require('../middlewares/authMiddleware')
+
+const router = Router()
 
 router.use(protect)
 
 router.get('/', getMovements)
 router.post('/', createMovement)
 
-module.exports = router
+export default router
