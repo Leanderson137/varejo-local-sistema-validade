@@ -18,10 +18,13 @@ export type AlertFilterOption =
   | 'Sem Estoque'
 
 export type AlertIconName =
-  | 'milk'
-  | 'cookie'
+  | 'egg'
   | 'beef'
+  | 'wheat'
+  | 'milk'
   | 'croissant'
+  | 'coffee'
+  | 'package'
 
 export interface AlertSummaryCard {
   id: string
@@ -34,6 +37,7 @@ export interface AlertSummaryCard {
 
 export interface AlertRow {
   id: string
+  productId: string
   name: string
   meta: string
   iconName: AlertIconName

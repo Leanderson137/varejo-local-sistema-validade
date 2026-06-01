@@ -1,7 +1,10 @@
+import api from './api'
 import type { LoginRequest, LoginResponse, User } from '../types/auth'
 
 const AUTH_TOKEN_KEY = 'varejo-local-token'
 const AUTH_USER_KEY = 'varejo-local-user'
+
+const USE_MOCK_AUTH = true
 
 const mockUser: User = {
   id: 'user-admin',
@@ -10,7 +13,17 @@ const mockUser: User = {
   role: 'admin'
 }
 
-const login = (data: LoginRequest): LoginResponse => {
+const saveAuthData = (
+  response: LoginResponse,
+  rememberMe: boolean
+): void => {
+  const storage = rememberMe ? localStorage : sessionStorage
+
+  storage.setItem(AUTH_TOKEN_KEY, response.token)
+  storage.setItem(AUTH_USER_KEY, JSON.stringify(response.user))
+}
+
+const loginWithMock = (data: LoginRequest): LoginResponse => {
   const email = data.email.trim().toLowerCase()
   const password = data.password.trim()
 
@@ -26,15 +39,28 @@ const login = (data: LoginRequest): LoginResponse => {
     token: 'mock-token-varejo-local'
   }
 
-  if (data.rememberMe) {
-    localStorage.setItem(AUTH_TOKEN_KEY, response.token)
-    localStorage.setItem(AUTH_USER_KEY, JSON.stringify(response.user))
-  } else {
-    sessionStorage.setItem(AUTH_TOKEN_KEY, response.token)
-    sessionStorage.setItem(AUTH_USER_KEY, JSON.stringify(response.user))
-  }
+  saveAuthData(response, data.rememberMe)
 
   return response
+}
+
+const loginWithApi = async (data: LoginRequest): Promise<LoginResponse> => {
+  const response = await api.post<LoginResponse, LoginRequest>(
+    '/auth/login',
+    data
+  )
+
+  saveAuthData(response, data.rememberMe)
+
+  return response
+}
+
+const login = async (data: LoginRequest): Promise<LoginResponse> => {
+  if (USE_MOCK_AUTH) {
+    return loginWithMock(data)
+  }
+
+  return loginWithApi(data)
 }
 
 const logout = (): void => {
@@ -46,12 +72,16 @@ const logout = (): void => {
 }
 
 const getToken = (): string | null => {
-  return localStorage.getItem(AUTH_TOKEN_KEY) || sessionStorage.getItem(AUTH_TOKEN_KEY)
+  return (
+    localStorage.getItem(AUTH_TOKEN_KEY) ||
+    sessionStorage.getItem(AUTH_TOKEN_KEY)
+  )
 }
 
 const getCurrentUser = (): User | null => {
   const storedUser =
-    localStorage.getItem(AUTH_USER_KEY) || sessionStorage.getItem(AUTH_USER_KEY)
+    localStorage.getItem(AUTH_USER_KEY) ||
+    sessionStorage.getItem(AUTH_USER_KEY)
 
   if (!storedUser) {
     return null

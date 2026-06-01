@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { LucideIcon } from 'lucide-react'
 import {
   Calendar,
@@ -19,6 +19,7 @@ import Layout from '../components/Layout'
 import movementService from '../services/movementService'
 import type {
   DateFilterType,
+  Movement,
   MovementType,
   MovementTypeFilter,
   SortOption,
@@ -33,6 +34,19 @@ const typeIcons: MovementIconMap = {
   descarte: Trash2,
   ajuste: AlertCircle
 }
+
+const lossCategoryColors = [
+  'red',
+  'orange',
+  'purple',
+  'red',
+  'orange',
+  'purple',
+  'red',
+  'orange',
+  'purple',
+  'red'
+] as const
 
 const getIsoWeekKey = (dateValue: string): string => {
   const date = new Date(`${dateValue}T00:00:00`)
@@ -51,20 +65,26 @@ const getIsoWeekKey = (dateValue: string): string => {
   return `${currentDate.getUTCFullYear()}-W${String(weekNumber).padStart(2, '0')}`
 }
 
+const getTodayDateValue = (): string => {
+  return new Date().toISOString().split('T')[0]
+}
+
 const getCurrentDateValue = (filterType: DateFilterType): string => {
+  const today = getTodayDateValue()
+
   if (filterType === 'year') {
-    return '2023'
+    return today.slice(0, 4)
   }
 
   if (filterType === 'month') {
-    return '2023-11'
+    return today.slice(0, 7)
   }
 
   if (filterType === 'week') {
-    return getIsoWeekKey('2023-11-15')
+    return getIsoWeekKey(today)
   }
 
-  return '2023-11-15'
+  return today
 }
 
 const getDateInputType = (filterType: DateFilterType): string => {
@@ -107,18 +127,74 @@ const matchesDateFilter = (
   return movementDate === selectedDate
 }
 
+const formatCurrency = (value: number): string => {
+  return value.toLocaleString('pt-BR', {
+    style: 'currency',
+    currency: 'BRL'
+  })
+}
+
+const getMovementQuantity = (movement: Movement): number => {
+  if (typeof movement.quantity === 'number') {
+    return movement.quantity
+  }
+
+  const parsedQuantity = Number(
+    movement.qty
+      ?.replace('+', '')
+      .replace('-', '')
+      .trim()
+  )
+
+  return Number.isNaN(parsedQuantity) ? 0 : parsedQuantity
+}
+
+const getMovementLossValue = (movement: Movement): number => {
+  if (typeof movement.lossValue === 'number') {
+    return movement.lossValue
+  }
+
+  const quantity = getMovementQuantity(movement)
+  const unitCost = typeof movement.unitCost === 'number' ? movement.unitCost : 0
+
+  return quantity * unitCost
+}
+
 const Movements = () => {
-  const movements = movementService.getMovements()
   const sortOptions = movementService.getSortOptions()
   const categoryFilters = movementService.getCategoryFilters()
   const typeFilters = movementService.getTypeFilters()
-  const categoryLoss = movementService.getCategoryLoss()
 
+  const [movements, setMovements] = useState<Movement[]>([])
   const [dateFilterType, setDateFilterType] = useState<DateFilterType>('month')
-  const [selectedDate, setSelectedDate] = useState<string>('2023-11')
+  const [selectedDate, setSelectedDate] = useState<string>(getCurrentDateValue('month'))
   const [sortBy, setSortBy] = useState<SortOption>('recentes')
   const [selectedCategory, setSelectedCategory] = useState<CategoryFilter>('Todas')
   const [selectedType, setSelectedType] = useState<MovementTypeFilter>('Todos')
+  const [showAllLossCategories, setShowAllLossCategories] = useState<boolean>(false)
+  const [loading, setLoading] = useState<boolean>(true)
+  const [errorMessage, setErrorMessage] = useState<string>('')
+
+  useEffect(() => {
+    const loadMovements = async () => {
+      try {
+        setLoading(true)
+        const loadedMovements = await movementService.getMovements()
+        setMovements(loadedMovements)
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : 'Não foi possível carregar as movimentações.'
+
+        setErrorMessage(message)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadMovements()
+  }, [])
 
   const handleDateFilterTypeChange = (filterType: DateFilterType) => {
     setDateFilterType(filterType)
@@ -157,15 +233,46 @@ const Movements = () => {
 
   const totalEntries = filteredMovements
     .filter((movement) => movement.type === 'entrada')
-    .reduce((total, movement) => total + Math.abs(Number(movement.qty)), 0)
+    .reduce((total, movement) => total + getMovementQuantity(movement), 0)
 
   const totalExits = filteredMovements
     .filter((movement) => movement.type === 'venda')
-    .reduce((total, movement) => total + Math.abs(Number(movement.qty)), 0)
+    .reduce((total, movement) => total + getMovementQuantity(movement), 0)
 
-  const totalLosses = filteredMovements
+  const totalLossQuantity = filteredMovements
     .filter((movement) => movement.type === 'descarte')
-    .reduce((total, movement) => total + Math.abs(Number(movement.qty)), 0)
+    .reduce((total, movement) => total + getMovementQuantity(movement), 0)
+
+  const totalLossValue = filteredMovements
+    .filter((movement) => movement.type === 'descarte')
+    .reduce((total, movement) => total + getMovementLossValue(movement), 0)
+
+  const categoryLoss = categoryFilters
+    .filter((category): category is Exclude<CategoryFilter, 'Todas'> => category !== 'Todas')
+    .map((category, index) => {
+      const value = filteredMovements
+        .filter((movement) => movement.type === 'descarte' && movement.category === category)
+        .reduce((total, movement) => total + getMovementLossValue(movement), 0)
+
+      const pct =
+        totalLossValue > 0
+          ? Math.round((value / totalLossValue) * 100)
+          : 0
+
+      return {
+        name: category,
+        value,
+        pct,
+        color: lossCategoryColors[index % lossCategoryColors.length]
+      }
+    })
+    .sort((a, b) => b.value - a.value)
+
+  const visibleCategoryLoss = showAllLossCategories
+    ? categoryLoss
+    : categoryLoss.slice(0, 3)
+
+  const biggestLossCategory = categoryLoss[0]
 
   return (
     <Layout>
@@ -173,6 +280,12 @@ const Movements = () => {
         <h1>Movimentação Mensal</h1>
         <p>Analise as entradas, saídas e possíveis perdas do seu estoque.</p>
       </header>
+
+      {errorMessage && (
+        <div className="alert alert-danger py-2 small" role="alert">
+          {errorMessage}
+        </div>
+      )}
 
       <section className="card border-0 shadow-sm movements-date-card mb-4">
         <div className="card-body d-flex flex-column flex-lg-row align-items-lg-center gap-3">
@@ -257,12 +370,14 @@ const Movements = () => {
               </div>
 
               <p className="summary-metric-label">Perdas por Vencimento</p>
-              <p className="summary-metric-value">{totalLosses}</p>
-              <p className="summary-metric-sub">Prejuízo estimado conforme descartes</p>
+              <p className="summary-metric-value">{totalLossQuantity}</p>
+              <p className="summary-metric-sub">
+                Prejuízo estimado: {formatCurrency(totalLossValue)}
+              </p>
 
               <span className="summary-metric-trend red">
                 <ArrowUp strokeWidth={2} size={14} />
-                Atenção aos itens descartados
+                Baseado nos descartes registrados
               </span>
             </div>
           </div>
@@ -343,49 +458,58 @@ const Movements = () => {
                 </thead>
 
                 <tbody>
-                  {filteredMovements.map((row) => {
-                    const TypeIcon: LucideIcon = typeIcons[row.type as MovementType]
-                    const [lotCode, lotInfo] = row.lot.split(' / ')
+                  {loading && (
+                    <tr>
+                      <td colSpan={5} className="text-center py-4 text-secondary">
+                        Carregando movimentações...
+                      </td>
+                    </tr>
+                  )}
 
-                    return (
-                      <tr key={row.id}>
-                        <td>{row.date}</td>
+                  {!loading &&
+                    filteredMovements.map((row) => {
+                      const TypeIcon: LucideIcon = typeIcons[row.type as MovementType]
+                      const [lotCode, lotInfo] = row.lot.split(' / ')
 
-                        <td>
-                          <span className="movement-product">{row.product}</span>
-                          <span className="d-block small text-secondary">
-                            {row.category}
-                          </span>
-                        </td>
+                      return (
+                        <tr key={row.id}>
+                          <td>{row.date}</td>
 
-                        <td>
-                          <span className={`movement-type ${row.type}`}>
-                            <TypeIcon strokeWidth={2} />
-                            {row.typeLabel}
-                          </span>
-                        </td>
+                          <td>
+                            <span className="movement-product">{row.product}</span>
+                            <span className="d-block small text-secondary">
+                              {row.category}
+                            </span>
+                          </td>
 
-                        <td className={`movement-qty ${row.qtyClass}`}>
-                          {row.qty}
-                        </td>
+                          <td>
+                            <span className={`movement-type ${row.type}`}>
+                              <TypeIcon strokeWidth={2} />
+                              {row.typeLabel}
+                            </span>
+                          </td>
 
-                        <td className="movement-lot">
-                          {row.lotHighlight ? (
-                            <>
-                              {lotCode} /{' '}
-                              <strong className={row.lotHighlight}>
-                                {lotInfo}
-                              </strong>
-                            </>
-                          ) : (
-                            row.lot
-                          )}
-                        </td>
-                      </tr>
-                    )
-                  })}
+                          <td className={`movement-qty ${row.qtyClass}`}>
+                            {row.qty}
+                          </td>
 
-                  {filteredMovements.length === 0 && (
+                          <td className="movement-lot">
+                            {row.lotHighlight ? (
+                              <>
+                                {lotCode} /{' '}
+                                <strong className={row.lotHighlight}>
+                                  {lotInfo}
+                                </strong>
+                              </>
+                            ) : (
+                              row.lot
+                            )}
+                          </td>
+                        </tr>
+                      )
+                    })}
+
+                  {!loading && filteredMovements.length === 0 && (
                     <tr>
                       <td colSpan={5} className="text-center py-4 text-secondary">
                         Nenhuma movimentação encontrada para o período selecionado.
@@ -409,19 +533,45 @@ const Movements = () => {
               <p className="analysis-section-label">Maior causa de perda</p>
 
               <div className="analysis-highlight">
-                <h3>Laticínios</h3>
-                <p>65% do total de descartes</p>
-                <span className="value">R$ 812,50</span>
+                {totalLossValue === 0 ? (
+                  <>
+                    <h3>Nenhum prejuízo registrado</h3>
+                    <p>Os dados aparecerão aqui quando houver descartes.</p>
+                    <span className="value">R$ 0,00</span>
+                  </>
+                ) : (
+                  <>
+                    <h3>{biggestLossCategory.name}</h3>
+                    <p>{biggestLossCategory.pct}% do total de descartes</p>
+                    <span className="value">{formatCurrency(biggestLossCategory.value)}</span>
+                  </>
+                )}
               </div>
 
-              <p className="analysis-section-label">Descartes por categoria</p>
+              <div className="d-flex align-items-center justify-content-between gap-2">
+                <p className="analysis-section-label mb-0">
+                  Descartes por categoria
+                </p>
 
-              <div className="d-flex flex-column gap-3 mb-4">
-                {categoryLoss.map((category) => (
+                {categoryLoss.length > 3 && (
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-link p-0 analysis-toggle"
+                    onClick={() => setShowAllLossCategories((current) => !current)}
+                  >
+                    {showAllLossCategories ? 'Ver menos' : 'Ver todas'}
+                  </button>
+                )}
+              </div>
+
+              <div className="d-flex flex-column gap-3 mb-4 mt-3">
+                {visibleCategoryLoss.map((category) => (
                   <div key={category.name}>
                     <div className="d-flex justify-content-between category-bar-label">
                       <span>{category.name}</span>
-                      <span>{category.pct}%</span>
+                      <span>
+                        {category.pct}% · {formatCurrency(category.value)}
+                      </span>
                     </div>
 
                     <div className="progress category-bar-track">
@@ -442,8 +592,7 @@ const Movements = () => {
               <div className="analysis-tip">
                 <Lightbulb strokeWidth={2} />
                 <p>
-                  Revise os pedidos de Laticínios. Considere reduzir a quantidade nas
-                  próximas 2 semanas para minimizar perdas.
+                  As recomendações aparecerão aqui quando houver histórico de perdas ou descartes.
                 </p>
               </div>
             </div>

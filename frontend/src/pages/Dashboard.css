@@ -266,3 +266,11 @@
   padding: 16px 24px 20px;
   border-top: 1px solid var(--border-light);
 }
+
+.empty-dashboard-message {
+  margin: 0;
+  padding: 12px 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}

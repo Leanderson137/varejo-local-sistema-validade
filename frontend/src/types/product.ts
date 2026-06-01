@@ -7,12 +7,17 @@ export type ProductCategory =
   | 'Laticínios'
   | 'Padaria'
   | 'Bebidas'
+  | 'Congelados'
+  | 'Mercearia'
+  | 'Limpeza'
+  | 'Higiene'
 
 export type ProductStatus =
   | 'sem-estoque'
   | 'estoque-baixo'
   | 'em-dia'
   | 'vencido'
+  | 'vencendo'
 
 export type ProductFilterStatus =
   | 'Em dia'
@@ -43,4 +48,5 @@ export interface CreateProductData {
   quantity: number
   minimumStock?: number
   costPrice?: string
+  expiry: string
 }

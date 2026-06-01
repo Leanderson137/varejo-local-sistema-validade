@@ -12,10 +12,12 @@ import {
   Coffee,
   Pencil,
   ArrowLeftRight,
-  MoreHorizontal
+  Trash2,
+  Package
 } from 'lucide-react'
 import Layout from '../components/Layout'
 import ProductModal from '../components/ProductModal'
+import MovementModal from '../components/MovementModal'
 import productService from '../services/productService'
 import type {
   CreateProductData,
@@ -36,7 +38,11 @@ const categories: Array<ProductCategory | 'Todas as Categorias'> = [
   'Grãos',
   'Laticínios',
   'Padaria',
-  'Bebidas'
+  'Bebidas',
+  'Congelados',
+  'Mercearia',
+  'Limpeza',
+  'Higiene'
 ]
 
 const getProductIcon = (product: Product): LucideIcon => {
@@ -60,7 +66,7 @@ const getProductIcon = (product: Product): LucideIcon => {
     return Croissant
   }
 
-  return Coffee
+  return Package
 }
 
 const formatQuantity = (product: Product): string => {
@@ -71,26 +77,124 @@ const formatQuantity = (product: Product): string => {
   return `${product.quantity} un`
 }
 
+const formatExpiryDate = (expiry: string): string => {
+  if (!expiry) {
+    return 'Não informada'
+  }
+
+  const [year, month, day] = expiry.split('-')
+
+  if (!year || !month || !day) {
+    return expiry
+  }
+
+  return `${day}/${month}/${year}`
+}
+
 const Stock = () => {
-  const [modalOpen, setModalOpen] = useState<boolean>(false)
+  const [productModalOpen, setProductModalOpen] = useState<boolean>(false)
+  const [movementModalOpen, setMovementModalOpen] = useState<boolean>(false)
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
+  const [productToEdit, setProductToEdit] = useState<Product | null>(null)
+
   const [products, setProducts] = useState<Product[]>([])
   const [search, setSearch] = useState<string>('')
   const [category, setCategory] = useState<ProductCategory | 'Todas as Categorias'>(
     'Todas as Categorias'
   )
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('Todos')
+  const [loading, setLoading] = useState<boolean>(true)
+  const [errorMessage, setErrorMessage] = useState<string>('')
+
+  const loadProducts = async () => {
+    try {
+      setLoading(true)
+      const loadedProducts = await productService.getProducts()
+      setProducts(loadedProducts)
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'Não foi possível carregar os produtos.'
+
+      setErrorMessage(message)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   useEffect(() => {
-    setProducts(productService.getProducts())
+    loadProducts()
   }, [])
 
-  const handleSaveProduct = (data: CreateProductData) => {
-    const createdProduct = productService.createProduct(data)
+  const handleOpenCreateModal = () => {
+    setProductToEdit(null)
+    setProductModalOpen(true)
+  }
 
-    setProducts((currentProducts) => [
-      createdProduct,
-      ...currentProducts
-    ])
+  const handleOpenEditModal = (product: Product) => {
+    setProductToEdit(product)
+    setProductModalOpen(true)
+  }
+
+  const handleCloseProductModal = () => {
+    setProductModalOpen(false)
+    setProductToEdit(null)
+  }
+
+  const handleSaveProduct = async (data: CreateProductData) => {
+    try {
+      if (productToEdit) {
+        await productService.updateProduct(productToEdit.id, data)
+      } else {
+        await productService.createProduct(data)
+      }
+
+      await loadProducts()
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'Não foi possível salvar o produto.'
+
+      setErrorMessage(message)
+    }
+  }
+
+  const handleDeleteProduct = async (product: Product) => {
+    const confirmed = window.confirm(
+      `Deseja remover o produto "${product.name}" do estoque?`
+    )
+
+    if (!confirmed) {
+      return
+    }
+
+    try {
+      await productService.deleteProduct(product.id)
+      await loadProducts()
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'Não foi possível remover o produto.'
+
+      setErrorMessage(message)
+    }
+  }
+
+  const handleOpenMovementModal = (product: Product) => {
+    setSelectedProduct(product)
+    setMovementModalOpen(true)
+  }
+
+  const handleCloseMovementModal = () => {
+    setMovementModalOpen(false)
+    setSelectedProduct(null)
+  }
+
+  const handleMovementSaved = async () => {
+    await loadProducts()
   }
 
   const filteredProducts = products.filter((product) => {
@@ -122,12 +226,18 @@ const Stock = () => {
         <button
           type="button"
           className="btn btn-primary stock-primary-btn"
-          onClick={() => setModalOpen(true)}
+          onClick={handleOpenCreateModal}
         >
           <Plus strokeWidth={2.5} />
           Cadastrar Novo Produto
         </button>
       </div>
+
+      {errorMessage && (
+        <div className="alert alert-danger py-2 small" role="alert">
+          {errorMessage}
+        </div>
+      )}
 
       <section className="card border-0 shadow-sm stock-filters mb-3">
         <div className="card-body d-flex flex-column flex-xl-row align-items-xl-center gap-3">
@@ -191,78 +301,90 @@ const Stock = () => {
             </thead>
 
             <tbody>
-              {filteredProducts.map((row) => {
-                const Icon = getProductIcon(row)
-
-                return (
-                  <tr key={row.id}>
-                    <td>
-                      <div className="d-flex align-items-center gap-3">
-                        <div className="stock-product-icon">
-                          <Icon strokeWidth={2} />
-                        </div>
-
-                        <div>
-                          <strong className="stock-product-name">{row.name}</strong>
-
-                          {row.barcode && (
-                            <span className="d-block stock-barcode">
-                              Código: {row.barcode}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </td>
-
-                    <td className="stock-category">{row.category}</td>
-                    <td className="stock-qty">{formatQuantity(row)}</td>
-                    <td className="stock-expiry">{row.expiry}</td>
-
-                    <td>
-                      <span className={`stock-status ${row.status}`}>
-                        <span className="dot" />
-                        {row.statusLabel}
-                      </span>
-                    </td>
-
-                    <td>
-                      <div className="d-flex align-items-center gap-2">
-                        <button
-                          type="button"
-                          className="btn btn-sm btn-outline-secondary stock-action-btn"
-                          aria-label="Editar produto"
-                          title="Editar produto"
-                        >
-                          <Pencil strokeWidth={2} />
-                        </button>
-
-                        <button
-                          type="button"
-                          className="btn btn-sm btn-outline-secondary stock-action-btn"
-                          aria-label="Movimentar estoque"
-                          title="Movimentar estoque"
-                        >
-                          <ArrowLeftRight strokeWidth={2} />
-                        </button>
-
-                        <button
-                          type="button"
-                          className="btn btn-sm btn-outline-secondary stock-action-btn"
-                          aria-label="Ver detalhes"
-                          title="Ver detalhes"
-                        >
-                          <MoreHorizontal strokeWidth={2} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                )
-              })}
-
-              {filteredProducts.length === 0 && (
+              {loading && (
                 <tr>
                   <td colSpan={6} className="text-center py-4 text-secondary">
-                    Nenhum produto encontrado.
+                    Carregando produtos...
+                  </td>
+                </tr>
+              )}
+
+              {!loading &&
+                filteredProducts.map((row) => {
+                  const Icon = getProductIcon(row)
+
+                  return (
+                    <tr key={row.id}>
+                      <td>
+                        <div className="d-flex align-items-center gap-3">
+                          <div className="stock-product-icon">
+                            <Icon strokeWidth={2} />
+                          </div>
+
+                          <div>
+                            <strong className="stock-product-name">{row.name}</strong>
+
+                            {row.barcode && (
+                              <span className="d-block stock-barcode">
+                                Código: {row.barcode}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+
+                      <td className="stock-category">{row.category}</td>
+                      <td className="stock-qty">{formatQuantity(row)}</td>
+                      <td className="stock-expiry">{formatExpiryDate(row.expiry)}</td>
+
+                      <td>
+                        <span className={`stock-status ${row.status}`}>
+                          <span className="dot" />
+                          {row.statusLabel}
+                        </span>
+                      </td>
+
+                      <td>
+                        <div className="d-flex align-items-center gap-2">
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-outline-secondary stock-action-btn"
+                            aria-label="Editar produto"
+                            title="Editar produto"
+                            onClick={() => handleOpenEditModal(row)}
+                          >
+                            <Pencil strokeWidth={2} />
+                          </button>
+
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-outline-secondary stock-action-btn"
+                            aria-label="Movimentar estoque"
+                            title="Movimentar estoque"
+                            onClick={() => handleOpenMovementModal(row)}
+                          >
+                            <ArrowLeftRight strokeWidth={2} />
+                          </button>
+
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-outline-secondary stock-action-btn"
+                            aria-label="Remover produto"
+                            title="Remover produto"
+                            onClick={() => handleDeleteProduct(row)}
+                          >
+                            <Trash2 strokeWidth={2} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
+
+              {!loading && filteredProducts.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="text-center py-4 text-secondary">
+                    Nenhum produto cadastrado.
                   </td>
                 </tr>
               )}
@@ -272,9 +394,17 @@ const Stock = () => {
       </section>
 
       <ProductModal
-        open={modalOpen}
-        onClose={() => setModalOpen(false)}
+        open={productModalOpen}
+        productToEdit={productToEdit}
+        onClose={handleCloseProductModal}
         onSave={handleSaveProduct}
+      />
+
+      <MovementModal
+        open={movementModalOpen}
+        product={selectedProduct}
+        onClose={handleCloseMovementModal}
+        onSave={handleMovementSaved}
       />
     </Layout>
   )

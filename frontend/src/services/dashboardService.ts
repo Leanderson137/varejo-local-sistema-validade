@@ -8,64 +8,15 @@ import {
   Bell,
   Calendar
 } from 'lucide-react'
+import movementService from './movementService'
+import productService from './productService'
 import type {
   DashboardKpiCard,
   DashboardMovementItem,
   DashboardReportItem
 } from '../types/dashboard'
-
-const kpiCards: DashboardKpiCard[] = [
-  {
-    id: 'total-products',
-    label: 'Total de Produtos',
-    value: '8.137',
-    icon: ClipboardList,
-    iconClass: 'blue',
-    badge: 'Visão Geral',
-    badgeClass: 'blue',
-    border: null
-  },
-  {
-    id: 'expiring-soon',
-    label: 'Próximos ao Vencimento',
-    value: '342',
-    icon: Timer,
-    iconClass: 'yellow',
-    badge: '↑ 12%',
-    badgeClass: 'yellow',
-    border: null
-  },
-  {
-    id: 'expired-products',
-    label: 'Produtos Vencidos',
-    value: '84',
-    icon: AlertTriangle,
-    iconClass: 'red',
-    badge: 'Crítico',
-    badgeClass: 'red',
-    border: 'border-red'
-  },
-  {
-    id: 'out-of-stock',
-    label: 'Produtos Sem Estoque',
-    value: '12',
-    icon: Ban,
-    iconClass: 'red-dark',
-    badge: 'Esgotado',
-    badgeClass: 'red-dark',
-    border: 'border-red-dark'
-  },
-  {
-    id: 'low-stock',
-    label: 'Estoque Baixo',
-    value: '18',
-    icon: ShoppingCart,
-    iconClass: 'yellow',
-    badge: 'Alerta',
-    badgeClass: 'yellow',
-    border: null
-  }
-]
+import type { Product } from '../types/product'
+import type { Movement } from '../types/movement'
 
 const reports: DashboardReportItem[] = [
   {
@@ -87,59 +38,107 @@ const reports: DashboardReportItem[] = [
   {
     id: 'movements-report',
     title: 'Movimentação Mensal',
-    description: 'Resumo de entradas e saídas do mês corrente.',
+    description: 'Resumo de entradas e saídas do período.',
     icon: Calendar,
     iconClass: 'green',
     to: '/movimentacoes'
   }
 ]
 
-const recentMovements: DashboardMovementItem[] = [
-  {
-    id: 'movement-discard-yogurt',
-    tag: 'DESCARTE',
-    tagClass: 'red',
-    dotClass: 'red',
-    time: '10:42 AM',
-    title: 'Removidas 12 un de Iogurte Grego',
-    detail: 'Motivo: Vencimento do lote L-48291',
-    user: 'John Doe',
-    initials: 'JD'
-  },
-  {
-    id: 'movement-entry-milk',
-    tag: 'ENTRADA',
-    tagClass: 'green',
-    dotClass: 'green',
-    time: 'Ontem',
-    title: 'Adicionadas 50 un de Leite Integral',
-    detail: 'Fornecedor: Laticínios do Vale',
-    user: 'Maria Silva',
-    initials: 'MS'
-  },
-  {
-    id: 'movement-adjust-bread',
-    tag: 'AJUSTE',
-    tagClass: 'purple',
-    dotClass: 'purple',
-    time: 'Ontem',
-    title: 'Ajuste de inventário: Pão de Forma',
-    detail: 'Diferença: -2 unidades',
-    user: 'Carlos Souza',
-    initials: 'CS'
-  }
-]
+const countByStatus = (products: Product[], status: Product['status']): number => {
+  return products.filter((product) => product.status === status).length
+}
 
-const getKpiCards = (): DashboardKpiCard[] => {
-  return kpiCards
+const getKpiCards = async (): Promise<DashboardKpiCard[]> => {
+  const products = await productService.getProducts()
+
+  return [
+    {
+      id: 'total-products',
+      label: 'Total de Produtos',
+      value: String(products.length),
+      icon: ClipboardList,
+      iconClass: 'blue',
+      badge: 'Visão Geral',
+      badgeClass: 'blue',
+      border: null
+    },
+    {
+      id: 'expiring-soon',
+      label: 'Próximos ao Vencimento',
+      value: String(countByStatus(products, 'vencendo')),
+      icon: Timer,
+      iconClass: 'yellow',
+      badge: 'Atenção',
+      badgeClass: 'yellow',
+      border: null
+    },
+    {
+      id: 'expired-products',
+      label: 'Produtos Vencidos',
+      value: String(countByStatus(products, 'vencido')),
+      icon: AlertTriangle,
+      iconClass: 'red',
+      badge: 'Crítico',
+      badgeClass: 'red',
+      border: 'border-red'
+    },
+    {
+      id: 'out-of-stock',
+      label: 'Produtos Sem Estoque',
+      value: String(countByStatus(products, 'sem-estoque')),
+      icon: Ban,
+      iconClass: 'red-dark',
+      badge: 'Esgotado',
+      badgeClass: 'red-dark',
+      border: 'border-red-dark'
+    },
+    {
+      id: 'low-stock',
+      label: 'Estoque Baixo',
+      value: String(countByStatus(products, 'estoque-baixo')),
+      icon: ShoppingCart,
+      iconClass: 'yellow',
+      badge: 'Alerta',
+      badgeClass: 'yellow',
+      border: null
+    }
+  ]
+}
+
+const mapMovementToDashboardItem = (movement: Movement): DashboardMovementItem => {
+  const tagClass =
+    movement.type === 'entrada'
+      ? 'green'
+      : movement.type === 'descarte'
+        ? 'red'
+        : movement.type === 'ajuste'
+          ? 'purple'
+          : 'yellow'
+
+  return {
+    id: movement.id,
+    tag: movement.typeLabel.toUpperCase(),
+    tagClass,
+    dotClass: tagClass,
+    time: movement.date,
+    title: `${movement.typeLabel} de ${movement.qty.replace('-', '').replace('+', '')} un de ${movement.product}`,
+    detail: movement.observation || movement.lot,
+    user: 'Sistema',
+    initials: 'VL'
+  }
 }
 
 const getReports = (): DashboardReportItem[] => {
   return reports
 }
 
-const getRecentMovements = (): DashboardMovementItem[] => {
-  return recentMovements
+const getRecentMovements = async (): Promise<DashboardMovementItem[]> => {
+  const movements = await movementService.getMovements()
+
+  return movements
+    .slice(0, 3)
+    .map(mapMovementToDashboardItem)
 }
 
 export default {

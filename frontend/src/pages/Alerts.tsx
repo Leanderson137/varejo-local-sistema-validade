@@ -1,34 +1,176 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   Search,
   Trash2,
-  ShoppingCart,
-  Tag,
+  Pencil,
   Milk,
-  Cookie,
   Beef,
-  Croissant
+  Croissant,
+  Wheat,
+  Egg,
+  Coffee,
+  Package,
+  ArrowLeftRight
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import Layout from '../components/Layout'
+import ProductModal from '../components/ProductModal'
+import MovementModal from '../components/MovementModal'
 import alertService from '../services/alertService'
-import type { AlertFilterOption, AlertIconName } from '../types/alert'
+import productService from '../services/productService'
+import type {
+  AlertFilterOption,
+  AlertIconName,
+  AlertRow,
+  AlertSummaryCard
+} from '../types/alert'
+import type { CreateProductData, Product } from '../types/product'
 import './Alerts.css'
 
 const alertIcons: Record<AlertIconName, LucideIcon> = {
-  milk: Milk,
-  cookie: Cookie,
+  egg: Egg,
   beef: Beef,
-  croissant: Croissant
+  wheat: Wheat,
+  milk: Milk,
+  croissant: Croissant,
+  coffee: Coffee,
+  package: Package
 }
 
 const Alerts = () => {
-  const summaryCards = alertService.getSummaryCards()
   const filters = alertService.getFilters()
-  const alertRows = alertService.getAlerts()
 
+  const [summaryCards, setSummaryCards] = useState<AlertSummaryCard[]>([])
+  const [alertRows, setAlertRows] = useState<AlertRow[]>([])
+  const [products, setProducts] = useState<Product[]>([])
   const [activeFilter, setActiveFilter] = useState<AlertFilterOption>('Todos')
   const [search, setSearch] = useState<string>('')
+  const [loading, setLoading] = useState<boolean>(true)
+  const [errorMessage, setErrorMessage] = useState<string>('')
+
+  const [productToEdit, setProductToEdit] = useState<Product | null>(null)
+  const [productModalOpen, setProductModalOpen] = useState<boolean>(false)
+
+  const [productToMove, setProductToMove] = useState<Product | null>(null)
+  const [movementModalOpen, setMovementModalOpen] = useState<boolean>(false)
+
+  const loadAlerts = async () => {
+    try {
+      setLoading(true)
+
+      const [loadedProducts, loadedSummaryCards, loadedAlerts] = await Promise.all([
+        productService.getProducts(),
+        alertService.getSummaryCards(),
+        alertService.getAlerts()
+      ])
+
+      setProducts(loadedProducts)
+      setSummaryCards(loadedSummaryCards)
+      setAlertRows(loadedAlerts)
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'Não foi possível carregar os alertas.'
+
+      setErrorMessage(message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    loadAlerts()
+  }, [])
+
+  const findProductFromAlert = (alert: AlertRow): Product | null => {
+    return products.find((product) => product.id === alert.productId) ?? null
+  }
+
+  const handleOpenMovementModal = (alert: AlertRow) => {
+    const product = findProductFromAlert(alert)
+
+    if (!product) {
+      setErrorMessage('Produto não encontrado para movimentação.')
+      return
+    }
+
+    setProductToMove(product)
+    setMovementModalOpen(true)
+  }
+
+  const handleCloseMovementModal = () => {
+    setMovementModalOpen(false)
+    setProductToMove(null)
+  }
+
+  const handleMovementSaved = async () => {
+    await loadAlerts()
+  }
+
+  const handleOpenEditProduct = (alert: AlertRow) => {
+    const product = findProductFromAlert(alert)
+
+    if (!product) {
+      setErrorMessage('Produto não encontrado para edição.')
+      return
+    }
+
+    setProductToEdit(product)
+    setProductModalOpen(true)
+  }
+
+  const handleCloseProductModal = () => {
+    setProductModalOpen(false)
+    setProductToEdit(null)
+  }
+
+  const handleSaveProduct = async (data: CreateProductData) => {
+    if (!productToEdit) {
+      return
+    }
+
+    try {
+      await productService.updateProduct(productToEdit.id, data)
+      await loadAlerts()
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'Não foi possível atualizar o produto.'
+
+      setErrorMessage(message)
+    }
+  }
+
+  const handleDeleteProduct = async (alert: AlertRow) => {
+    const product = findProductFromAlert(alert)
+
+    if (!product) {
+      setErrorMessage('Produto não encontrado para remoção.')
+      return
+    }
+
+    const confirmed = window.confirm(
+      `Deseja remover o produto "${product.name}" do estoque?`
+    )
+
+    if (!confirmed) {
+      return
+    }
+
+    try {
+      await productService.deleteProduct(product.id)
+      await loadAlerts()
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'Não foi possível remover o produto.'
+
+      setErrorMessage(message)
+    }
+  }
 
   const filteredRows = alertRows.filter((row) => {
     const normalizedSearch = search.trim().toLowerCase()
@@ -56,6 +198,12 @@ const Alerts = () => {
           Acompanhe produtos vencidos, próximos do vencimento e com estoque baixo.
         </p>
       </header>
+
+      {errorMessage && (
+        <div className="alert alert-danger py-2 small" role="alert">
+          {errorMessage}
+        </div>
+      )}
 
       <section className="row g-3 mb-4">
         {summaryCards.map((card) => {
@@ -130,75 +278,87 @@ const Alerts = () => {
               </thead>
 
               <tbody>
-                {filteredRows.map((row) => {
-                  const ProductIcon = alertIcons[row.iconName]
+                {loading && (
+                  <tr>
+                    <td colSpan={4} className="text-center py-4 text-secondary">
+                      Carregando alertas...
+                    </td>
+                  </tr>
+                )}
 
-                  return (
-                    <tr key={row.id}>
-                      <td>
-                        <div className="d-flex align-items-center gap-3">
-                          <div className="product-thumb">
-                            <ProductIcon strokeWidth={2} />
+                {!loading &&
+                  filteredRows.map((row) => {
+                    const ProductIcon = alertIcons[row.iconName]
+
+                    return (
+                      <tr key={row.id}>
+                        <td>
+                          <div className="d-flex align-items-center gap-3">
+                            <div className="product-thumb">
+                              <ProductIcon strokeWidth={2} />
+                            </div>
+
+                            <div>
+                              <strong className="d-block small text-heading">
+                                {row.name}
+                              </strong>
+                              <span className="small text-secondary">{row.meta}</span>
+                            </div>
                           </div>
+                        </td>
 
-                          <div>
-                            <strong className="d-block small text-heading">
-                              {row.name}
-                            </strong>
-                            <span className="small text-secondary">{row.meta}</span>
+                        <td>
+                          <span className={`status-badge ${row.status}`}>
+                            <span className="dot" />
+                            {row.statusLabel}
+                          </span>
+                        </td>
+
+                        <td>
+                          <strong className="d-block small">{row.dateMain}</strong>
+                          <span className={`small fw-semibold date-${row.dateColor}`}>
+                            {row.dateSub}
+                          </span>
+                        </td>
+
+                        <td>
+                          <div className="d-flex align-items-center gap-2">
+                            <button
+                              type="button"
+                              className="btn btn-sm btn-outline-secondary action-btn"
+                              aria-label="Editar produto"
+                              title="Editar produto"
+                              onClick={() => handleOpenEditProduct(row)}
+                            >
+                              <Pencil strokeWidth={2} />
+                            </button>
+
+                            <button
+                              type="button"
+                              className="btn btn-sm btn-outline-secondary action-btn"
+                              aria-label="Movimentar estoque"
+                              title="Movimentar estoque"
+                              onClick={() => handleOpenMovementModal(row)}
+                            >
+                              <ArrowLeftRight strokeWidth={2} />
+                            </button>
+
+                            <button
+                              type="button"
+                              className="btn btn-sm btn-outline-secondary action-btn"
+                              aria-label="Remover produto"
+                              title="Remover produto"
+                              onClick={() => handleDeleteProduct(row)}
+                            >
+                              <Trash2 strokeWidth={2} />
+                            </button>
                           </div>
-                        </div>
-                      </td>
+                        </td>
+                      </tr>
+                    )
+                  })}
 
-                      <td>
-                        <span className={`status-badge ${row.status}`}>
-                          <span className="dot" />
-                          {row.statusLabel}
-                        </span>
-                      </td>
-
-                      <td>
-                        <strong className="d-block small">{row.dateMain}</strong>
-                        <span className={`small fw-semibold date-${row.dateColor}`}>
-                          {row.dateSub}
-                        </span>
-                      </td>
-
-                      <td>
-                        <div className="d-flex align-items-center gap-2">
-                          <button
-                            type="button"
-                            className="btn btn-sm btn-outline-secondary action-btn"
-                            aria-label="Descartar produto"
-                            title="Descartar produto"
-                          >
-                            <Trash2 strokeWidth={2} />
-                          </button>
-
-                          <button
-                            type="button"
-                            className="btn btn-sm btn-outline-secondary action-btn"
-                            aria-label="Repor estoque"
-                            title="Repor estoque"
-                          >
-                            <ShoppingCart strokeWidth={2} />
-                          </button>
-
-                          <button
-                            type="button"
-                            className="btn btn-sm btn-outline-secondary action-btn"
-                            aria-label="Ver detalhes do alerta"
-                            title="Ver detalhes do alerta"
-                          >
-                            <Tag strokeWidth={2} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                })}
-
-                {filteredRows.length === 0 && (
+                {!loading && filteredRows.length === 0 && (
                   <tr>
                     <td colSpan={4} className="text-center py-4 text-secondary">
                       Nenhum alerta encontrado.
@@ -210,6 +370,20 @@ const Alerts = () => {
           </div>
         </div>
       </section>
+
+      <ProductModal
+        open={productModalOpen}
+        productToEdit={productToEdit}
+        onClose={handleCloseProductModal}
+        onSave={handleSaveProduct}
+      />
+
+      <MovementModal
+        open={movementModalOpen}
+        product={productToMove}
+        onClose={handleCloseMovementModal}
+        onSave={handleMovementSaved}
+      />
     </Layout>
   )
 }

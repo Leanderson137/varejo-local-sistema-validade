@@ -4,48 +4,16 @@ import {
   Clock,
   Package
 } from 'lucide-react'
+import productService from './productService'
+import type { Product, ProductCategory } from '../types/product'
 import type {
   AlertFilterOption,
+  AlertIconName,
   AlertRow,
   AlertSummaryCard
 } from '../types/alert'
 
-const STORAGE_KEY = 'varejo-local-alerts'
-
-const summaryCards: AlertSummaryCard[] = [
-  {
-    id: 'summary-expired',
-    title: 'Crítico (Vencidos)',
-    value: '12',
-    unit: 'produtos',
-    variant: 'red',
-    icon: AlertTriangle
-  },
-  {
-    id: 'summary-out-of-stock',
-    title: 'Crítico (Sem Estoque)',
-    value: '05',
-    unit: 'esgotados',
-    variant: 'red-dark',
-    icon: Ban
-  },
-  {
-    id: 'summary-expiring',
-    title: 'Atenção (Vencendo)',
-    value: '34',
-    unit: 'em 7 dias',
-    variant: 'yellow',
-    icon: Clock
-  },
-  {
-    id: 'summary-low-stock',
-    title: 'Informativo (Estoque Baixo)',
-    value: '08',
-    unit: 'para repor',
-    variant: 'orange',
-    icon: Package
-  }
-]
+const EXPIRING_SOON_DAYS = 7
 
 const filters: AlertFilterOption[] = [
   'Todos',
@@ -55,102 +23,206 @@ const filters: AlertFilterOption[] = [
   'Sem Estoque'
 ]
 
-const initialAlerts: AlertRow[] = [
-  {
-    id: 'alert-yogurt-expired',
-    name: 'Iogurte Natural 500g',
-    meta: 'Lote: L-48291',
-    iconName: 'milk',
-    status: 'vencido',
-    statusLabel: 'Vencido',
-    dateMain: 'Há 2 dias',
-    dateSub: 'Vencido em 12/10',
-    dateColor: 'red'
-  },
-  {
-    id: 'alert-cookie-out-stock',
-    name: 'Biscoito Recheado Chocolate',
-    meta: 'Estoque: 0 unid.',
-    iconName: 'cookie',
-    status: 'sem-estoque',
-    statusLabel: 'Sem Estoque',
-    dateMain: 'Esgotado',
-    dateSub: 'Última saída: Ontem',
-    dateColor: 'pink'
-  },
-  {
-    id: 'alert-beef-low-stock',
-    name: 'Carne Moída Especial 1kg',
-    meta: 'Estoque: 12 unid.',
-    iconName: 'beef',
-    status: 'estoque-baixo',
-    statusLabel: 'Estoque Baixo',
-    dateMain: 'Hoje',
-    dateSub: 'Abaixo do mínimo',
-    dateColor: 'yellow'
-  },
-  {
-    id: 'alert-bread-expiring',
-    name: 'Pão de Forma Integral',
-    meta: 'Lote: P-11029',
-    iconName: 'croissant',
-    status: 'vencendo',
-    statusLabel: 'Vencendo',
-    dateMain: 'Em 3 dias',
-    dateSub: 'Vence em 15/10',
-    dateColor: 'orange'
-  }
-]
+const getToday = (): Date => {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
 
-const readAlertsFromStorage = (): AlertRow[] | null => {
-  const storedAlerts = localStorage.getItem(STORAGE_KEY)
+  return today
+}
 
-  if (!storedAlerts) {
+const getDaysUntilExpiry = (expiry: string): number | null => {
+  if (!expiry) {
     return null
   }
 
-  try {
-    return JSON.parse(storedAlerts) as AlertRow[]
-  } catch {
-    localStorage.removeItem(STORAGE_KEY)
+  const expiryDate = new Date(`${expiry}T00:00:00`)
+
+  if (Number.isNaN(expiryDate.getTime())) {
     return null
   }
+
+  const differenceInMs = expiryDate.getTime() - getToday().getTime()
+
+  return Math.ceil(differenceInMs / 86400000)
 }
 
-const saveAlertsToStorage = (alerts: AlertRow[]): void => {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(alerts))
-}
-
-const getAlerts = (): AlertRow[] => {
-  const storedAlerts = readAlertsFromStorage()
-
-  if (storedAlerts) {
-    return storedAlerts
+const formatExpiryDate = (expiry: string): string => {
+  if (!expiry) {
+    return 'Não informada'
   }
 
-  saveAlertsToStorage(initialAlerts)
+  const [year, month, day] = expiry.split('-')
 
-  return initialAlerts
+  if (!year || !month || !day) {
+    return expiry
+  }
+
+  return `${day}/${month}/${year}`
 }
 
-const getSummaryCards = (): AlertSummaryCard[] => {
-  return summaryCards
+const getIconNameByCategory = (category: ProductCategory): AlertIconName => {
+  if (category === 'Hortifruti') {
+    return 'egg'
+  }
+
+  if (category === 'Carnes') {
+    return 'beef'
+  }
+
+  if (category === 'Grãos') {
+    return 'wheat'
+  }
+
+  if (category === 'Laticínios') {
+    return 'milk'
+  }
+
+  if (category === 'Padaria') {
+    return 'croissant'
+  }
+
+  if (category === 'Bebidas') {
+    return 'coffee'
+  }
+
+  return 'package'
+}
+
+const buildAlertRowsFromProducts = (products: Product[]): AlertRow[] => {
+  const alerts: AlertRow[] = []
+
+  products.forEach((product) => {
+    const daysUntilExpiry = getDaysUntilExpiry(product.expiry)
+    const iconName = getIconNameByCategory(product.category)
+
+    if (daysUntilExpiry !== null && daysUntilExpiry < 0) {
+      alerts.push({
+        id: `${product.id}-expired`,
+        productId: product.id,
+        name: product.name,
+        meta: `Validade: ${formatExpiryDate(product.expiry)}`,
+        iconName,
+        status: 'vencido',
+        statusLabel: 'Vencido',
+        dateMain: 'Vencido',
+        dateSub: `Venceu em ${formatExpiryDate(product.expiry)}`,
+        dateColor: 'red'
+      })
+    }
+
+    if (product.quantity <= 0) {
+      alerts.push({
+        id: `${product.id}-out-of-stock`,
+        productId: product.id,
+        name: product.name,
+        meta: 'Estoque: 0 unid.',
+        iconName,
+        status: 'sem-estoque',
+        statusLabel: 'Sem Estoque',
+        dateMain: 'Esgotado',
+        dateSub: 'Produto sem unidades disponíveis',
+        dateColor: 'pink'
+      })
+    }
+
+    if (
+      daysUntilExpiry !== null &&
+      daysUntilExpiry >= 0 &&
+      daysUntilExpiry <= EXPIRING_SOON_DAYS
+    ) {
+      alerts.push({
+        id: `${product.id}-expiring`,
+        productId: product.id,
+        name: product.name,
+        meta: `Validade: ${formatExpiryDate(product.expiry)}`,
+        iconName,
+        status: 'vencendo',
+        statusLabel: 'Vencendo',
+        dateMain: daysUntilExpiry === 0 ? 'Hoje' : `Em ${daysUntilExpiry} dias`,
+        dateSub: `Vence em ${formatExpiryDate(product.expiry)}`,
+        dateColor: 'orange'
+      })
+    }
+
+    if (
+      product.minimumStock !== undefined &&
+      product.quantity > 0 &&
+      product.quantity <= product.minimumStock
+    ) {
+      alerts.push({
+        id: `${product.id}-low-stock`,
+        productId: product.id,
+        name: product.name,
+        meta: `Estoque: ${product.quantity} unid.`,
+        iconName,
+        status: 'estoque-baixo',
+        statusLabel: 'Estoque Baixo',
+        dateMain: 'Atenção',
+        dateSub: `Mínimo definido: ${product.minimumStock}`,
+        dateColor: 'yellow'
+      })
+    }
+  })
+
+  return alerts
+}
+
+const getAlerts = async (): Promise<AlertRow[]> => {
+  const products = await productService.getProducts()
+
+  return buildAlertRowsFromProducts(products)
+}
+
+const getSummaryCards = async (): Promise<AlertSummaryCard[]> => {
+  const alerts = await getAlerts()
+
+  const expiredCount = alerts.filter((alert) => alert.status === 'vencido').length
+  const outOfStockCount = alerts.filter((alert) => alert.status === 'sem-estoque').length
+  const expiringCount = alerts.filter((alert) => alert.status === 'vencendo').length
+  const lowStockCount = alerts.filter((alert) => alert.status === 'estoque-baixo').length
+
+  return [
+    {
+      id: 'summary-expired',
+      title: 'Crítico (Vencidos)',
+      value: String(expiredCount),
+      unit: 'produtos',
+      variant: 'red',
+      icon: AlertTriangle
+    },
+    {
+      id: 'summary-out-of-stock',
+      title: 'Crítico (Sem Estoque)',
+      value: String(outOfStockCount),
+      unit: 'esgotados',
+      variant: 'red-dark',
+      icon: Ban
+    },
+    {
+      id: 'summary-expiring',
+      title: 'Atenção (Vencendo)',
+      value: String(expiringCount),
+      unit: 'em 7 dias',
+      variant: 'yellow',
+      icon: Clock
+    },
+    {
+      id: 'summary-low-stock',
+      title: 'Informativo (Estoque Baixo)',
+      value: String(lowStockCount),
+      unit: 'para repor',
+      variant: 'orange',
+      icon: Package
+    }
+  ]
 }
 
 const getFilters = (): AlertFilterOption[] => {
   return filters
 }
 
-const resetAlerts = (): AlertRow[] => {
-  localStorage.removeItem(STORAGE_KEY)
-  saveAlertsToStorage(initialAlerts)
-
-  return initialAlerts
-}
-
 export default {
   getAlerts,
   getSummaryCards,
-  getFilters,
-  resetAlerts
+  getFilters
 }

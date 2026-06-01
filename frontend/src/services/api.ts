@@ -1,7 +1,12 @@
-const API_BASE_URL = 'http://localhost:5000/api'
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
 
 interface RequestOptions extends RequestInit {
-  token?: string
+  token?: string | null
+}
+
+interface ApiErrorResponse {
+  message?: string
+  error?: string
 }
 
 const request = async <T>(
@@ -20,38 +25,53 @@ const request = async <T>(
   })
 
   if (!response.ok) {
-    const errorData = await response.json().catch(() => null)
+    const errorData = await response
+      .json()
+      .catch(() => null) as ApiErrorResponse | null
 
     throw new Error(
-      errorData?.message || 'Erro ao se comunicar com o servidor.'
+      errorData?.message ||
+      errorData?.error ||
+      'Erro ao se comunicar com o servidor.'
     )
+  }
+
+  if (response.status === 204) {
+    return undefined as T
   }
 
   return response.json() as Promise<T>
 }
 
 export default {
-  get: <T>(endpoint: string, token?: string) =>
+  get: <T>(endpoint: string, token?: string | null) =>
     request<T>(endpoint, {
       method: 'GET',
       token
     }),
 
-  post: <T, Body>(endpoint: string, body: Body, token?: string) =>
+  post: <T, Body>(endpoint: string, body: Body, token?: string | null) =>
     request<T>(endpoint, {
       method: 'POST',
       body: JSON.stringify(body),
       token
     }),
 
-  put: <T, Body>(endpoint: string, body: Body, token?: string) =>
+  put: <T, Body>(endpoint: string, body: Body, token?: string | null) =>
     request<T>(endpoint, {
       method: 'PUT',
       body: JSON.stringify(body),
       token
     }),
 
-  delete: <T>(endpoint: string, token?: string) =>
+  patch: <T, Body>(endpoint: string, body: Body, token?: string | null) =>
+    request<T>(endpoint, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+      token
+    }),
+
+  delete: <T>(endpoint: string, token?: string | null) =>
     request<T>(endpoint, {
       method: 'DELETE',
       token

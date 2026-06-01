@@ -10,10 +10,16 @@ export type LotHighlight = 'red' | 'orange' | null
 
 export type CategoryFilter =
   | 'Todas'
-  | 'Laticínios'
-  | 'Padaria'
   | 'Hortifruti'
   | 'Carnes'
+  | 'Grãos'
+  | 'Laticínios'
+  | 'Padaria'
+  | 'Bebidas'
+  | 'Congelados'
+  | 'Mercearia'
+  | 'Limpeza'
+  | 'Higiene'
 
 export type MovementCategory = Exclude<CategoryFilter, 'Todas'>
 
@@ -23,16 +29,35 @@ export type DateFilterType = 'year' | 'month' | 'week' | 'day'
 
 export interface Movement {
   id: string
+  productId: string
+  product: string
+  barcode?: string
+  category: MovementCategory
   date: string
   dateValue: string
-  product: string
-  category: MovementCategory
   type: MovementType
   typeLabel: string
   qty: string
+  quantity: number
   qtyClass: QuantityClass
   lot: string
   lotHighlight: LotHighlight
+  observation?: string
+  unitCost?: number
+  lossValue?: number
+}
+
+export interface CreateMovementData {
+  productId: string
+  product: string
+  barcode?: string
+  category: MovementCategory
+  type: MovementType
+  quantity: number
+  dateValue: string
+  expiry: string
+  observation?: string
+  unitCost?: number
 }
 
 export interface MovementTypeOption {

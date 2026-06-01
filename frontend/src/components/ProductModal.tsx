@@ -1,13 +1,14 @@
 import { ChangeEvent, FormEvent, useEffect, useState } from 'react'
 import { X } from 'lucide-react'
-import type { CreateProductData, ProductCategory } from '../types/product'
+import type { CreateProductData, Product, ProductCategory } from '../types/product'
 import { isValidBarcode, normalizeBarcode } from '../utils/barcodeValidator'
 import './ProductModal.css'
 
 interface ProductModalProps {
   open: boolean
+  productToEdit?: Product | null
   onClose: () => void
-  onSave: (product: CreateProductData) => void
+  onSave: (product: CreateProductData) => void | Promise<void>
 }
 
 interface ProductFormData {
@@ -18,6 +19,7 @@ interface ProductFormData {
   quantity: string
   minimumStock: string
   costPrice: string
+  expiry: string
 }
 
 const categories: ProductCategory[] = [
@@ -26,7 +28,11 @@ const categories: ProductCategory[] = [
   'Grãos',
   'Laticínios',
   'Padaria',
-  'Bebidas'
+  'Bebidas',
+  'Congelados',
+  'Mercearia',
+  'Limpeza',
+  'Higiene'
 ]
 
 const suppliers = [
@@ -43,12 +49,39 @@ const initialFormData: ProductFormData = {
   supplier: '',
   quantity: '',
   minimumStock: '',
-  costPrice: ''
+  costPrice: '',
+  expiry: ''
 }
 
-const ProductModal = ({ open, onClose, onSave }: ProductModalProps) => {
+const mapProductToFormData = (product?: Product | null): ProductFormData => {
+  if (!product) {
+    return initialFormData
+  }
+
+  return {
+    name: product.name,
+    barcode: product.barcode ?? '',
+    category: product.category,
+    supplier: product.supplier ?? '',
+    quantity: String(product.quantity),
+    minimumStock:
+      product.minimumStock !== undefined ? String(product.minimumStock) : '',
+    costPrice: product.costPrice ?? '',
+    expiry: product.expiry
+  }
+}
+
+const ProductModal = ({
+  open,
+  productToEdit,
+  onClose,
+  onSave
+}: ProductModalProps) => {
   const [formData, setFormData] = useState<ProductFormData>(initialFormData)
   const [barcodeError, setBarcodeError] = useState<string>('')
+  const [loading, setLoading] = useState<boolean>(false)
+
+  const isEditing = Boolean(productToEdit)
 
   useEffect(() => {
     if (!open) {
@@ -72,10 +105,11 @@ const ProductModal = ({ open, onClose, onSave }: ProductModalProps) => {
 
   useEffect(() => {
     if (open) {
-      setFormData(initialFormData)
+      setFormData(mapProductToFormData(productToEdit))
       setBarcodeError('')
+      setLoading(false)
     }
-  }, [open])
+  }, [open, productToEdit])
 
   if (!open) {
     return null
@@ -93,7 +127,8 @@ const ProductModal = ({ open, onClose, onSave }: ProductModalProps) => {
       'product-supplier': 'supplier',
       'product-qty': 'quantity',
       'product-min': 'minimumStock',
-      'product-cost': 'costPrice'
+      'product-cost': 'costPrice',
+      'product-expiry': 'expiry'
     }
 
     const field = fieldMap[id]
@@ -125,7 +160,7 @@ const ProductModal = ({ open, onClose, onSave }: ProductModalProps) => {
     }))
   }
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
 
     const normalizedBarcode = normalizeBarcode(formData.barcode)
@@ -139,19 +174,26 @@ const ProductModal = ({ open, onClose, onSave }: ProductModalProps) => {
       return
     }
 
-    onSave({
-      name: formData.name.trim(),
-      barcode: normalizedBarcode || undefined,
-      category: formData.category,
-      supplier: formData.supplier || undefined,
-      quantity: Number(formData.quantity),
-      minimumStock: formData.minimumStock
-        ? Number(formData.minimumStock)
-        : undefined,
-      costPrice: formData.costPrice || undefined
-    })
+    try {
+      setLoading(true)
 
-    onClose()
+      await onSave({
+        name: formData.name.trim(),
+        barcode: normalizedBarcode || undefined,
+        category: formData.category,
+        supplier: formData.supplier || undefined,
+        quantity: Number(formData.quantity),
+        minimumStock: formData.minimumStock
+          ? Number(formData.minimumStock)
+          : undefined,
+        costPrice: formData.costPrice || undefined,
+        expiry: formData.expiry
+      })
+
+      onClose()
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
@@ -164,7 +206,9 @@ const ProductModal = ({ open, onClose, onSave }: ProductModalProps) => {
         aria-labelledby="product-modal-title"
       >
         <div className="card-header bg-white d-flex align-items-center justify-content-between product-modal-header">
-          <h2 id="product-modal-title">Cadastrar Novo Produto</h2>
+          <h2 id="product-modal-title">
+            {isEditing ? 'Editar Produto' : 'Cadastrar Novo Produto'}
+          </h2>
 
           <button
             type="button"
@@ -172,6 +216,7 @@ const ProductModal = ({ open, onClose, onSave }: ProductModalProps) => {
             onClick={onClose}
             aria-label="Fechar"
             title="Fechar"
+            disabled={loading}
           >
             <X strokeWidth={2} />
           </button>
@@ -191,10 +236,11 @@ const ProductModal = ({ open, onClose, onSave }: ProductModalProps) => {
               id="product-name"
               type="text"
               className="form-control"
-              placeholder="Ex: Leite Desnatado 1L"
+              placeholder="Ex: Arroz Integral 5kg"
               value={formData.name}
               onChange={handleChange}
               required
+              disabled={loading}
             />
           </div>
 
@@ -213,6 +259,7 @@ const ProductModal = ({ open, onClose, onSave }: ProductModalProps) => {
                 onChange={handleChange}
                 inputMode="numeric"
                 maxLength={14}
+                disabled={loading}
               />
 
               {barcodeError && (
@@ -233,6 +280,7 @@ const ProductModal = ({ open, onClose, onSave }: ProductModalProps) => {
                 value={formData.category}
                 onChange={handleChange}
                 required
+                disabled={loading}
               >
                 <option value="" disabled>
                   Selecionar...
@@ -258,6 +306,7 @@ const ProductModal = ({ open, onClose, onSave }: ProductModalProps) => {
                 className="form-select"
                 value={formData.supplier}
                 onChange={handleChange}
+                disabled={loading}
               >
                 <option value="" disabled>
                   Selecionar...
@@ -285,6 +334,7 @@ const ProductModal = ({ open, onClose, onSave }: ProductModalProps) => {
                 value={formData.quantity}
                 onChange={handleChange}
                 required
+                disabled={loading}
               />
             </div>
           </div>
@@ -303,25 +353,43 @@ const ProductModal = ({ open, onClose, onSave }: ProductModalProps) => {
                 placeholder="0"
                 value={formData.minimumStock}
                 onChange={handleChange}
+                disabled={loading}
               />
             </div>
 
             <div className="col-12 col-md-6">
-              <label htmlFor="product-cost" className="form-label product-modal-label">
-                Preço de Custo
+              <label htmlFor="product-expiry" className="form-label product-modal-label">
+                Data de Validade <span className="required">*</span>
               </label>
 
-              <div className="input-group product-modal-input-group">
-                <span className="input-group-text">R$</span>
-                <input
-                  id="product-cost"
-                  type="text"
-                  className="form-control"
-                  placeholder="0,00"
-                  value={formData.costPrice}
-                  onChange={handleChange}
-                />
-              </div>
+              <input
+                id="product-expiry"
+                type="date"
+                className="form-control"
+                value={formData.expiry}
+                onChange={handleChange}
+                required
+                disabled={loading}
+              />
+            </div>
+          </div>
+
+          <div>
+            <label htmlFor="product-cost" className="form-label product-modal-label">
+              Preço de Custo
+            </label>
+
+            <div className="input-group product-modal-input-group">
+              <span className="input-group-text">R$</span>
+              <input
+                id="product-cost"
+                type="text"
+                className="form-control"
+                placeholder="0,00"
+                value={formData.costPrice}
+                onChange={handleChange}
+                disabled={loading}
+              />
             </div>
           </div>
         </form>
@@ -331,6 +399,7 @@ const ProductModal = ({ open, onClose, onSave }: ProductModalProps) => {
             type="button"
             className="btn product-modal-cancel"
             onClick={onClose}
+            disabled={loading}
           >
             Cancelar
           </button>
@@ -339,8 +408,15 @@ const ProductModal = ({ open, onClose, onSave }: ProductModalProps) => {
             type="submit"
             className="btn product-modal-save"
             form="product-modal-form"
+            disabled={loading}
           >
-            Salvar Produto
+            {loading
+              ? isEditing
+                ? 'Atualizando...'
+                : 'Salvando...'
+              : isEditing
+                ? 'Atualizar Produto'
+                : 'Salvar Produto'}
           </button>
         </div>
       </div>

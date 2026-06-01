@@ -1,119 +1,19 @@
+import api from './api'
 import type {
+  CategoryFilter,
   CategoryLoss,
+  CreateMovementData,
   Movement,
+  MovementType,
   MovementTypeOption,
-  SortOptionItem,
-  CategoryFilter
+  QuantityClass,
+  SortOptionItem
 } from '../types/movement'
 
 const STORAGE_KEY = 'varejo-local-movements'
+const USE_MOCK_MOVEMENTS = true
 
-const initialMovements: Movement[] = [
-  {
-    id: crypto.randomUUID(),
-    date: '15/Nov',
-    dateValue: '2023-11-15',
-    product: 'Leite Integral 1L',
-    category: 'Laticínios',
-    type: 'entrada',
-    typeLabel: 'Entrada',
-    qty: '+50',
-    qtyClass: 'positive',
-    lot: 'L-8821 / 20/Dez',
-    lotHighlight: null
-  },
-  {
-    id: crypto.randomUUID(),
-    date: '14/Nov',
-    dateValue: '2023-11-14',
-    product: 'Pão de Forma',
-    category: 'Padaria',
-    type: 'venda',
-    typeLabel: 'Venda',
-    qty: '-15',
-    qtyClass: 'negative',
-    lot: 'L-1102 / 18/Nov',
-    lotHighlight: null
-  },
-  {
-    id: crypto.randomUUID(),
-    date: '14/Nov',
-    dateValue: '2023-11-14',
-    product: 'Iogurte Grego',
-    category: 'Laticínios',
-    type: 'descarte',
-    typeLabel: 'Descarte',
-    qty: '-12',
-    qtyClass: 'loss',
-    lot: 'L-99 / Vencido',
-    lotHighlight: 'red'
-  },
-  {
-    id: crypto.randomUUID(),
-    date: '13/Nov',
-    dateValue: '2023-11-13',
-    product: 'Ovos (Dúzia)',
-    category: 'Hortifruti',
-    type: 'ajuste',
-    typeLabel: 'Ajuste',
-    qty: '-2',
-    qtyClass: 'negative',
-    lot: 'L-4420 / 25/Nov',
-    lotHighlight: null
-  },
-  {
-    id: crypto.randomUUID(),
-    date: '12/Nov',
-    dateValue: '2023-11-12',
-    product: 'Queijo Minas',
-    category: 'Laticínios',
-    type: 'descarte',
-    typeLabel: 'Descarte',
-    qty: '-8',
-    qtyClass: 'loss',
-    lot: 'L-33 / Vence Hoje',
-    lotHighlight: 'orange'
-  },
-  {
-    id: crypto.randomUUID(),
-    date: '18/Out',
-    dateValue: '2023-10-18',
-    product: 'Peito de Frango 1kg',
-    category: 'Carnes',
-    type: 'entrada',
-    typeLabel: 'Entrada',
-    qty: '+30',
-    qtyClass: 'positive',
-    lot: 'L-7712 / 02/Nov',
-    lotHighlight: null
-  },
-  {
-    id: crypto.randomUUID(),
-    date: '11/Out',
-    dateValue: '2023-10-11',
-    product: 'Iogurte Natural',
-    category: 'Laticínios',
-    type: 'descarte',
-    typeLabel: 'Descarte',
-    qty: '-10',
-    qtyClass: 'loss',
-    lot: 'L-221 / Vencido',
-    lotHighlight: 'red'
-  },
-  {
-    id: crypto.randomUUID(),
-    date: '20/Set',
-    dateValue: '2023-09-20',
-    product: 'Pão Francês',
-    category: 'Padaria',
-    type: 'venda',
-    typeLabel: 'Venda',
-    qty: '-40',
-    qtyClass: 'negative',
-    lot: 'L-901 / 22/Set',
-    lotHighlight: null
-  }
-]
+const initialMovements: Movement[] = []
 
 const sortOptions: SortOptionItem[] = [
   { label: 'Mais recentes', value: 'recentes' },
@@ -123,10 +23,16 @@ const sortOptions: SortOptionItem[] = [
 
 const categoryFilters: CategoryFilter[] = [
   'Todas',
+  'Hortifruti',
+  'Carnes',
+  'Grãos',
   'Laticínios',
   'Padaria',
-  'Hortifruti',
-  'Carnes'
+  'Bebidas',
+  'Congelados',
+  'Mercearia',
+  'Limpeza',
+  'Higiene'
 ]
 
 const typeFilters: MovementTypeOption[] = [
@@ -137,11 +43,67 @@ const typeFilters: MovementTypeOption[] = [
   { label: 'Ajuste', value: 'ajuste' }
 ]
 
-const categoryLoss: CategoryLoss[] = [
-  { name: 'Laticínios', pct: 65, color: 'red' },
-  { name: 'Hortifruti', pct: 20, color: 'orange' },
-  { name: 'Padaria', pct: 15, color: 'purple' }
+const movementLabels: Record<MovementType, string> = {
+  entrada: 'Entrada',
+  venda: 'Venda',
+  descarte: 'Descarte',
+  ajuste: 'Ajuste'
+}
+
+const monthNames = [
+  'Jan',
+  'Fev',
+  'Mar',
+  'Abr',
+  'Mai',
+  'Jun',
+  'Jul',
+  'Ago',
+  'Set',
+  'Out',
+  'Nov',
+  'Dez'
 ]
+
+const formatMovementDate = (dateValue: string): string => {
+  const [year, month, day] = dateValue.split('-')
+
+  if (!year || !month || !day) {
+    return dateValue
+  }
+
+  return `${day}/${monthNames[Number(month) - 1]}`
+}
+
+const formatExpiryDate = (expiry: string): string => {
+  const [year, month, day] = expiry.split('-')
+
+  if (!year || !month || !day) {
+    return expiry || 'Sem validade'
+  }
+
+  return `${day}/${month}/${year}`
+}
+
+const getQuantityClass = (type: MovementType): QuantityClass => {
+  if (type === 'entrada') {
+    return 'positive'
+  }
+
+  if (type === 'descarte') {
+    return 'loss'
+  }
+
+  return 'negative'
+}
+
+const getQuantityText = (type: MovementType, quantity: number): string => {
+  if (type === 'entrada' || type === 'ajuste') {
+    return `+${quantity}`
+  }
+
+  return `-${quantity}`
+}
 
 const readMovementsFromStorage = (): Movement[] | null => {
   const storedMovements = localStorage.getItem(STORAGE_KEY)
@@ -162,7 +124,7 @@ const saveMovementsToStorage = (movements: Movement[]): void => {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(movements))
 }
 
-const getMovements = (): Movement[] => {
+const getMovementsMock = (): Movement[] => {
   const storedMovements = readMovementsFromStorage()
 
   if (storedMovements) {
@@ -172,6 +134,68 @@ const getMovements = (): Movement[] => {
   saveMovementsToStorage(initialMovements)
 
   return initialMovements
+}
+
+const createMovementMock = (data: CreateMovementData): Movement => {
+  const movements = getMovementsMock()
+
+  const lossValue =
+    data.type === 'descarte'
+      ? data.quantity * (data.unitCost ?? 0)
+      : 0
+
+  const newMovement: Movement = {
+    id: crypto.randomUUID(),
+    productId: data.productId,
+    product: data.product,
+    barcode: data.barcode,
+    category: data.category,
+    date: formatMovementDate(data.dateValue),
+    dateValue: data.dateValue,
+    type: data.type,
+    typeLabel: movementLabels[data.type],
+    qty: getQuantityText(data.type, data.quantity),
+    quantity: data.quantity,
+    qtyClass: getQuantityClass(data.type),
+    lot: `Validade / ${formatExpiryDate(data.expiry)}`,
+    lotHighlight: data.type === 'descarte' ? 'red' : null,
+    observation: data.observation,
+    unitCost: data.unitCost,
+    lossValue
+  }
+
+  const updatedMovements = [newMovement, ...movements]
+  saveMovementsToStorage(updatedMovements)
+
+  return newMovement
+}
+
+const getMovementsFromApi = async (): Promise<Movement[]> => {
+  return api.get<Movement[]>('/movements')
+}
+
+const createMovementFromApi = async (
+  data: CreateMovementData
+): Promise<Movement> => {
+  return api.post<Movement, CreateMovementData>('/movements', data)
+}
+
+const getMovements = async (): Promise<Movement[]> => {
+  if (USE_MOCK_MOVEMENTS) {
+    return getMovementsMock()
+  }
+
+  return getMovementsFromApi()
+}
+
+const createMovement = async (
+  data: CreateMovementData
+): Promise<Movement> => {
+  if (USE_MOCK_MOVEMENTS) {
+    return createMovementMock(data)
+  }
+
+  return createMovementFromApi(data)
 }
 
 const getSortOptions = (): SortOptionItem[] => {
@@ -187,11 +211,23 @@ const getTypeFilters = (): MovementTypeOption[] => {
 }
 
 const getCategoryLoss = (): CategoryLoss[] => {
-  return categoryLoss
+  return [
+    { name: 'Hortifruti', pct: 0, color: 'orange' },
+    { name: 'Carnes', pct: 0, color: 'red' },
+    { name: 'Grãos', pct: 0, color: 'purple' },
+    { name: 'Laticínios', pct: 0, color: 'red' },
+    { name: 'Padaria', pct: 0, color: 'purple' },
+    { name: 'Bebidas', pct: 0, color: 'orange' },
+    { name: 'Congelados', pct: 0, color: 'red' },
+    { name: 'Mercearia', pct: 0, color: 'purple' },
+    { name: 'Limpeza', pct: 0, color: 'orange' },
+    { name: 'Higiene', pct: 0, color: 'red' }
+  ]
 }
 
 export default {
   getMovements,
+  createMovement,
   getSortOptions,
   getCategoryFilters,
   getTypeFilters,

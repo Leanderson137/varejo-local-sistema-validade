@@ -138,6 +138,12 @@
   color: var(--text-heading);
 }
 
+.stock-barcode {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
 .stock-category,
 .stock-expiry {
   color: var(--text-secondary) !important;
@@ -165,23 +171,39 @@
   border-radius: 50%;
 }
 
-.stock-status.sem-estoque,
 .stock-status.vencido {
   background: var(--red-bg);
   color: var(--red);
 }
 
-.stock-status.sem-estoque .dot,
 .stock-status.vencido .dot {
   background: var(--red);
 }
 
+.stock-status.sem-estoque {
+  background: #fce7f3;
+  color: #db2777;
+}
+
+.stock-status.sem-estoque .dot {
+  background: #db2777;
+}
+
 .stock-status.estoque-baixo {
+  background: var(--yellow-bg);
+  color: #b45309;
+}
+
+.stock-status.estoque-baixo .dot {
+  background: var(--yellow);
+}
+
+.stock-status.vencendo {
   background: var(--orange-bg);
   color: var(--orange);
 }
 
-.stock-status.estoque-baixo .dot {
+.stock-status.vencendo .dot {
   background: var(--orange);
 }
 
@@ -210,9 +232,3 @@
     justify-content: center;
   }
 }
-
-.stock-barcode {
-  margin-top: 2px;
-  font-size: 12px;
-  color: var(--text-muted);
-}  

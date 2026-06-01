@@ -23,6 +23,7 @@ const Login = () => {
   const [showPassword, setShowPassword] = useState<boolean>(false)
   const [formData, setFormData] = useState<LoginFormData>(initialFormData)
   const [errorMessage, setErrorMessage] = useState<string>('')
+  const [loading, setLoading] = useState<boolean>(false)
 
   const handleChange = (event: ChangeEvent<HTMLInputElement>) => {
     const { id, value, checked, type } = event.target
@@ -37,11 +38,13 @@ const Login = () => {
     }
   }
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
+    setLoading(true)
+    setErrorMessage('')
 
     try {
-      authService.login({
+      await authService.login({
         email: formData.email,
         password: formData.password,
         rememberMe: formData.rememberMe
@@ -55,6 +58,8 @@ const Login = () => {
           : 'Não foi possível realizar o login.'
 
       setErrorMessage(message)
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -93,6 +98,7 @@ const Login = () => {
                   onChange={handleChange}
                   required
                   autoComplete="email"
+                  disabled={loading}
                 />
               </div>
             </div>
@@ -114,6 +120,7 @@ const Login = () => {
                   onChange={handleChange}
                   required
                   autoComplete="current-password"
+                  disabled={loading}
                 />
 
                 <button
@@ -122,13 +129,14 @@ const Login = () => {
                   onClick={() => setShowPassword((value) => !value)}
                   aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
                   title={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
+                  disabled={loading}
                 >
                   {showPassword ? <EyeOff strokeWidth={2} /> : <Eye strokeWidth={2} />}
                 </button>
               </div>
             </div>
 
-            <div className="d-flex align-items-center justify-content-between gap-3 login-options">
+            <div className="d-flex align-items-center login-options">
               <label className="form-check d-flex align-items-center gap-2 m-0 login-remember">
                 <input
                   id="rememberMe"
@@ -136,21 +144,14 @@ const Login = () => {
                   className="form-check-input m-0"
                   checked={formData.rememberMe}
                   onChange={handleChange}
+                  disabled={loading}
                 />
                 <span>Lembrar-me</span>
               </label>
-
-              <a
-                href="#"
-                className="login-forgot"
-                onClick={(event) => event.preventDefault()}
-              >
-                Esqueci minha senha
-              </a>
             </div>
 
-            <button type="submit" className="btn login-submit">
-              Entrar
+            <button type="submit" className="btn login-submit" disabled={loading}>
+              {loading ? 'Entrando...' : 'Entrar'}
               <ArrowRight strokeWidth={2.5} />
             </button>
           </form>
