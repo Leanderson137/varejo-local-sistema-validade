@@ -7,7 +7,8 @@ const {
   getLots,
   getLotById,
   updateLot,
-  discardLot
+  discardLot,
+  deleteOrphanLots
 } = require('../controllers/lotController')
 
 const router = Router()
@@ -19,5 +20,6 @@ router.get('/:id', getLotById)
 router.post('/', adminOnly, createLot)
 router.put('/:id', adminOnly, updateLot)
 router.patch('/:id/discard', adminOnly, discardLot)
+router.delete('/orphans/remove', adminOnly, deleteOrphanLots)
 
 export default router

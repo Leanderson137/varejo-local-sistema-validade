@@ -73,3 +73,14 @@ export const discardLot = asyncHandler<IdParams>(
     })
   }
 )
+
+export const deleteOrphanLots = asyncHandler(
+  async (req: Request, res: Response) => {
+    const deletedCount = await lotService.deleteOrphanLots()
+
+    return res.json({
+      message: 'Lotes órfãos removidos com sucesso.',
+      deletedCount
+    })
+  }
+)

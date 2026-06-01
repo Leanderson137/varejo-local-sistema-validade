@@ -1,5 +1,6 @@
 import { Types } from 'mongoose'
-import { ILot } from '../models/Lot'
+import Lot, { ILot } from '../models/Lot'
+import Product from '../models/Product'
 import lotRepository from '../repositories/lotRepository'
 import productRepository from '../repositories/productRepository'
 import AppError from '../errors/AppError'
@@ -66,10 +67,39 @@ const discardLot = async (id: string): Promise<ILot> => {
   return lot
 }
 
+const deleteOrphanLots = async (): Promise<number> => {
+  const lots = await Lot.find().select('_id productId')
+
+  const orphanLotIds: string[] = []
+
+  for (const lot of lots) {
+    const productExists = await Product.exists({
+      _id: lot.productId
+    })
+
+    if (!productExists) {
+      orphanLotIds.push(String(lot._id))
+    }
+  }
+
+  if (orphanLotIds.length === 0) {
+    return 0
+  }
+
+  const result = await Lot.deleteMany({
+    _id: {
+      $in: orphanLotIds
+    }
+  })
+
+  return result.deletedCount ?? 0
+}
+
 export default {
   createLot,
   getLots,
   getLotById,
   updateLot,
-  discardLot
+  discardLot,
+  deleteOrphanLots
 }
