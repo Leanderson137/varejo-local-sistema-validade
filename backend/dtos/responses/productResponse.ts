@@ -16,6 +16,7 @@ export interface ProductResponse {
   barcode?: string
   categoryId: string | ProductCategoryResponse
   unitCost: number
+  minimumStock: number
   alertDaysBeforeExpiry: number
   createdBy: string | ProductCreatedByResponse
   createdAt: Date

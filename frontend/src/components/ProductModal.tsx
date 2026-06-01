@@ -1,5 +1,7 @@
 import { ChangeEvent, FormEvent, useEffect, useState } from 'react'
 import { X } from 'lucide-react'
+import categoryService from '../services/categoryService'
+import type { Category } from '../types/category'
 import type { CreateProductData, Product, ProductCategory } from '../types/product'
 import { isValidBarcode, normalizeBarcode } from '../utils/barcodeValidator'
 import './ProductModal.css'
@@ -14,26 +16,14 @@ interface ProductModalProps {
 interface ProductFormData {
   name: string
   barcode: string
-  category: ProductCategory | ''
+  categoryId: string
   supplier: string
   quantity: string
   minimumStock: string
   costPrice: string
   expiry: string
+  lotNumber: string
 }
-
-const categories: ProductCategory[] = [
-  'Hortifruti',
-  'Carnes',
-  'Grãos',
-  'Laticínios',
-  'Padaria',
-  'Bebidas',
-  'Congelados',
-  'Mercearia',
-  'Limpeza',
-  'Higiene'
-]
 
 const suppliers = [
   'Laticínios do Vale',
@@ -45,12 +35,41 @@ const suppliers = [
 const initialFormData: ProductFormData = {
   name: '',
   barcode: '',
-  category: '',
+  categoryId: '',
   supplier: '',
   quantity: '',
   minimumStock: '',
   costPrice: '',
-  expiry: ''
+  expiry: '',
+  lotNumber: ''
+}
+
+const isProductCategory = (value: string): value is ProductCategory => {
+  return [
+    'Hortifruti',
+    'Carnes',
+    'Grãos',
+    'Laticínios',
+    'Padaria',
+    'Bebidas',
+    'Congelados',
+    'Mercearia',
+    'Limpeza',
+    'Higiene'
+  ].includes(value)
+}
+
+const getCategoryNameById = (
+  categories: Category[],
+  categoryId?: string
+): ProductCategory => {
+  const category = categories.find((currentCategory) => currentCategory.id === categoryId)
+
+  if (category && isProductCategory(category.name)) {
+    return category.name
+  }
+
+  return 'Mercearia'
 }
 
 const mapProductToFormData = (product?: Product | null): ProductFormData => {
@@ -61,13 +80,14 @@ const mapProductToFormData = (product?: Product | null): ProductFormData => {
   return {
     name: product.name,
     barcode: product.barcode ?? '',
-    category: product.category,
+    categoryId: product.categoryId ?? '',
     supplier: product.supplier ?? '',
     quantity: String(product.quantity),
     minimumStock:
       product.minimumStock !== undefined ? String(product.minimumStock) : '',
     costPrice: product.costPrice ?? '',
-    expiry: product.expiry
+    expiry: product.expiry,
+    lotNumber: product.lotNumber ?? ''
   }
 }
 
@@ -78,8 +98,11 @@ const ProductModal = ({
   onSave
 }: ProductModalProps) => {
   const [formData, setFormData] = useState<ProductFormData>(initialFormData)
+  const [categories, setCategories] = useState<Category[]>([])
   const [barcodeError, setBarcodeError] = useState<string>('')
+  const [errorMessage, setErrorMessage] = useState<string>('')
   const [loading, setLoading] = useState<boolean>(false)
+  const [loadingCategories, setLoadingCategories] = useState<boolean>(false)
 
   const isEditing = Boolean(productToEdit)
 
@@ -104,9 +127,35 @@ const ProductModal = ({
   }, [open, onClose])
 
   useEffect(() => {
+    if (!open) {
+      return
+    }
+
+    const loadCategories = async () => {
+      try {
+        setLoadingCategories(true)
+        const loadedCategories = await categoryService.getCategories()
+        setCategories(loadedCategories)
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : 'Não foi possível carregar as categorias.'
+
+        setErrorMessage(message)
+      } finally {
+        setLoadingCategories(false)
+      }
+    }
+
+    loadCategories()
+  }, [open])
+
+  useEffect(() => {
     if (open) {
       setFormData(mapProductToFormData(productToEdit))
       setBarcodeError('')
+      setErrorMessage('')
       setLoading(false)
     }
   }, [open, productToEdit])
@@ -123,12 +172,13 @@ const ProductModal = ({
     const fieldMap: Record<string, keyof ProductFormData> = {
       'product-name': 'name',
       'product-sku': 'barcode',
-      'product-category': 'category',
+      'product-category': 'categoryId',
       'product-supplier': 'supplier',
       'product-qty': 'quantity',
       'product-min': 'minimumStock',
       'product-cost': 'costPrice',
-      'product-expiry': 'expiry'
+      'product-expiry': 'expiry',
+      'product-lot': 'lotNumber'
     }
 
     const field = fieldMap[id]
@@ -170,27 +220,38 @@ const ProductModal = ({
       return
     }
 
-    if (!formData.category) {
+    if (!formData.categoryId) {
+      setErrorMessage('Selecione uma categoria.')
       return
     }
 
     try {
       setLoading(true)
+      setErrorMessage('')
 
       await onSave({
         name: formData.name.trim(),
         barcode: normalizedBarcode || undefined,
-        category: formData.category,
+        category: getCategoryNameById(categories, formData.categoryId),
+        categoryId: formData.categoryId,
         supplier: formData.supplier || undefined,
         quantity: Number(formData.quantity),
         minimumStock: formData.minimumStock
           ? Number(formData.minimumStock)
           : undefined,
         costPrice: formData.costPrice || undefined,
-        expiry: formData.expiry
+        expiry: formData.expiry,
+        lotNumber: formData.lotNumber || undefined
       })
 
       onClose()
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'Não foi possível salvar o produto.'
+
+      setErrorMessage(message)
     } finally {
       setLoading(false)
     }
@@ -227,6 +288,12 @@ const ProductModal = ({
           className="card-body product-modal-form"
           onSubmit={handleSubmit}
         >
+          {errorMessage && (
+            <div className="alert alert-danger py-2 small mb-0" role="alert">
+              {errorMessage}
+            </div>
+          )}
+
           <div>
             <label htmlFor="product-name" className="form-label product-modal-label">
               Nome do Produto <span className="required">*</span>
@@ -277,18 +344,18 @@ const ProductModal = ({
               <select
                 id="product-category"
                 className="form-select"
-                value={formData.category}
+                value={formData.categoryId}
                 onChange={handleChange}
                 required
-                disabled={loading}
+                disabled={loading || loadingCategories}
               >
                 <option value="" disabled>
-                  Selecionar...
+                  {loadingCategories ? 'Carregando...' : 'Selecionar...'}
                 </option>
 
                 {categories.map((category) => (
-                  <option key={category} value={category}>
-                    {category}
+                  <option key={category.id} value={category.id}>
+                    {category.name}
                   </option>
                 ))}
               </select>
@@ -372,6 +439,22 @@ const ProductModal = ({
                 disabled={loading}
               />
             </div>
+          </div>
+
+          <div>
+            <label htmlFor="product-lot" className="form-label product-modal-label">
+              Número do Lote
+            </label>
+
+            <input
+              id="product-lot"
+              type="text"
+              className="form-control"
+              placeholder="Ex: LOTE-001"
+              value={formData.lotNumber}
+              onChange={handleChange}
+              disabled={loading}
+            />
           </div>
 
           <div>

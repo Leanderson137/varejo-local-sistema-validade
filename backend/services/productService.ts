@@ -19,6 +19,8 @@ const createProduct = async (
 
   return productRepository.create({
     ...data,
+    minimumStock: data.minimumStock ?? 0,
+    alertDaysBeforeExpiry: data.alertDaysBeforeExpiry ?? 15,
     categoryId: new Types.ObjectId(data.categoryId),
     createdBy: new Types.ObjectId(data.createdBy)
   })

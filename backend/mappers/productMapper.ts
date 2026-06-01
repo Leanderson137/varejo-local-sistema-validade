@@ -46,6 +46,7 @@ export const toProductResponse = (
     barcode: product.barcode,
     categoryId: mapCategory(product.categoryId),
     unitCost: product.unitCost,
+    minimumStock: product.minimumStock ?? 0,
     alertDaysBeforeExpiry: product.alertDaysBeforeExpiry,
     createdBy: mapCreatedBy(product.createdBy),
     createdAt: product.createdAt,

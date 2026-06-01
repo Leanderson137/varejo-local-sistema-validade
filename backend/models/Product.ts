@@ -6,6 +6,7 @@ export interface IProduct extends Document {
   barcode?: string
   categoryId: Types.ObjectId
   unitCost: number
+  minimumStock: number
   alertDaysBeforeExpiry: number
   createdBy: Types.ObjectId
   createdAt: Date
@@ -37,6 +38,11 @@ const productSchema = new Schema<IProduct>(
     unitCost: {
       type: Number,
       required: [true, 'Custo unitário é obrigatório'],
+      min: 0
+    },
+    minimumStock: {
+      type: Number,
+      default: 0,
       min: 0
     },
     alertDaysBeforeExpiry: {

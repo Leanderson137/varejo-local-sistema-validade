@@ -1,16 +1,15 @@
 import api from './api'
-import type { LoginRequest, LoginResponse, User } from '../types/auth'
+import type { LoginApiResponse, LoginRequest, LoginResponse, User } from '../types/auth'
 
 const AUTH_TOKEN_KEY = 'varejo-local-token'
 const AUTH_USER_KEY = 'varejo-local-user'
 
-const USE_MOCK_AUTH = true
+const USE_MOCK_AUTH = false
 
 const mockUser: User = {
   id: 'user-admin',
   name: 'Administrador',
-  email: 'admin@varejolocal.com',
-  role: 'admin'
+  email: 'admin@varejolocal.com'
 }
 
 const saveAuthData = (
@@ -45,10 +44,19 @@ const loginWithMock = (data: LoginRequest): LoginResponse => {
 }
 
 const loginWithApi = async (data: LoginRequest): Promise<LoginResponse> => {
-  const response = await api.post<LoginResponse, LoginRequest>(
+  const apiResponse = await api.post<LoginApiResponse, LoginRequest>(
     '/auth/login',
     data
   )
+
+  const response: LoginResponse = {
+    user: {
+      id: apiResponse._id,
+      name: apiResponse.name,
+      email: apiResponse.email
+    },
+    token: apiResponse.token
+  }
 
   saveAuthData(response, data.rememberMe)
 

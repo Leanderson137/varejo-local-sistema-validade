@@ -4,6 +4,7 @@ export interface CreateProductRequest {
   barcode?: string
   categoryId: string
   unitCost: number
+  minimumStock?: number
   alertDaysBeforeExpiry?: number
 }
 
@@ -13,6 +14,7 @@ export interface UpdateProductRequest {
   barcode?: string
   categoryId?: string
   unitCost?: number
+  minimumStock?: number
   alertDaysBeforeExpiry?: number
 }
 
