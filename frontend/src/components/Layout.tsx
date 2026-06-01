@@ -1,34 +1,49 @@
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { ReactNode } from 'react'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
+import type { LucideIcon } from 'lucide-react'
 import {
   LayoutDashboard,
   Package,
   Bell,
   ArrowLeftRight,
-  LogOut,
-} from 'lucide-react';
-import BrandLogo from './BrandLogo';
-import './Layout.css';
+  LogOut
+} from 'lucide-react'
+import BrandLogo from './BrandLogo'
+import authService from '../services/authService'
+import './Layout.css'
 
-const navItems = [
+interface LayoutProps {
+  children: ReactNode
+}
+
+interface NavItem {
+  path: string
+  label: string
+  icon: LucideIcon
+}
+
+const navItems: NavItem[] = [
   { path: '/', label: 'Painel', icon: LayoutDashboard },
   { path: '/estoque', label: 'Estoque', icon: Package },
   { path: '/alerts', label: 'Alertas', icon: Bell },
-  { path: '/movimentacoes', label: 'Movimentações', icon: ArrowLeftRight },
-];
+  { path: '/movimentacoes', label: 'Movimentações', icon: ArrowLeftRight }
+]
 
-const Layout = ({ children }) => {
-  const location = useLocation();
-  const navigate = useNavigate();
+const Layout = ({ children }: LayoutProps) => {
+  const location = useLocation()
+  const navigate = useNavigate()
 
   const handleLogout = () => {
-    navigate('/login');
-  };
+    authService.logout()
+    navigate('/login')
+  }
 
   return (
     <div className="app-shell">
       <aside className="app-sidebar">
-        <div className="sidebar-brand">
+        <div className="d-flex align-items-center gap-3 sidebar-brand">
           <BrandLogo size={40} />
+
           <div className="sidebar-brand-text">
             <h2>Varejo Local</h2>
             <span>Gestão de Varejo</span>
@@ -40,7 +55,8 @@ const Layout = ({ children }) => {
             const isActive =
               path === '/'
                 ? location.pathname === '/'
-                : location.pathname.startsWith(path);
+                : location.pathname.startsWith(path)
+
             return (
               <Link
                 key={path}
@@ -50,19 +66,25 @@ const Layout = ({ children }) => {
                 <Icon strokeWidth={2} />
                 {label}
               </Link>
-            );
+            )
           })}
         </nav>
 
-        <button type="button" className="sidebar-logout" onClick={handleLogout}>
+        <button
+          type="button"
+          className="sidebar-logout"
+          onClick={handleLogout}
+          title="Sair do sistema"
+          aria-label="Sair do sistema"
+        >
           <LogOut strokeWidth={2} />
           Sair
         </button>
       </aside>
 
-      <div className="app-main">{children}</div>
+      <main className="app-main">{children}</main>
     </div>
-  );
-};
+  )
+}
 
-export default Layout;
+export default Layout
